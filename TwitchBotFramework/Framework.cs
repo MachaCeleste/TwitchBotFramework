@@ -7,7 +7,6 @@ using TwitchLib.Client;
 using TwitchLib.Client.Models;
 using TwitchLib.Communication.Clients;
 using TwitchLib.Communication.Models;
-using TwitchLib.PubSub;
 
 namespace TwitchBotFramework
 {
@@ -15,7 +14,6 @@ namespace TwitchBotFramework
     {
         private readonly TwitchAPI _api;
         private readonly TwitchClient _client;
-        private readonly TwitchPubSub _pubSub;
         private readonly string _resFile = "response.html";// If this file exists it will be your response html for token auth.
         private Token? _token;
         private User? _owner;
@@ -36,11 +34,6 @@ namespace TwitchBotFramework
         public TwitchClient Client => _client;
 
         /// <summary>
-        /// Public pubsub access
-        /// </summary>
-        public TwitchPubSub PubSub => _pubSub;
-
-        /// <summary>
         /// Twitch bot framework
         /// </summary>
         /// <param name="token">Can take Token object loaded from file</param>
@@ -54,7 +47,6 @@ namespace TwitchBotFramework
                 MessagesAllowedInPeriod = 750,
                 ThrottlingPeriod = TimeSpan.FromSeconds(30)
             }));
-            _pubSub = new TwitchPubSub();
         }
 
         /// <summary>
@@ -86,11 +78,6 @@ namespace TwitchBotFramework
         /// <returns></returns>
         public async Task ConnectAsync()
         {
-            await LoggingAsync("Connecting pubsub...");
-            _pubSub.OnLog += _pubSub_OnLog;
-            _pubSub.OnPubSubServiceConnected += _pubSub_OnPubSubServiceConnected;
-            _pubSub.ListenToChannelPoints(_owner.Id);
-            _pubSub.Connect();
             await LoggingAsync("Connecting client...");
             _client.OnLog += _client_OnLog;
             _client.Initialize(new ConnectionCredentials(_owner.Login, _token.AccessToken));
@@ -100,14 +87,6 @@ namespace TwitchBotFramework
         private void _client_OnLog(object? sender, TwitchLib.Client.Events.OnLogArgs e)
         {
             LoggingAsync(e.Data);
-        }
-        private void _pubSub_OnLog(object? sender, TwitchLib.PubSub.Events.OnLogArgs e)
-        {
-            LoggingAsync(e.Data);
-        }
-        private void _pubSub_OnPubSubServiceConnected(object? sender, EventArgs e)
-        {
-            _pubSub.SendTopics(_token.AccessToken);
         }
 
         private async Task GetTokenAsync(string clientId, string secret, List<AuthScopes> scopes)
