@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using Microsoft.Extensions.Logging;
+using System.Diagnostics;
 using System.Net;
 using TwitchLib.Api;
 using TwitchLib.Api.Core.Enums;
@@ -7,6 +8,7 @@ using TwitchLib.Client;
 using TwitchLib.Client.Models;
 using TwitchLib.Communication.Clients;
 using TwitchLib.Communication.Models;
+using TwitchLib.EventSub.Websockets;
 
 namespace TwitchBotFramework
 {
@@ -14,6 +16,7 @@ namespace TwitchBotFramework
     {
         private readonly TwitchAPI _api;
         private readonly TwitchClient _client;
+        private readonly EventSubWebsocketClient _eventSub;
         private readonly string _resFile = "response.html";// If this file exists it will be your response html for token auth.
         private Token? _token;
         private User? _owner;
@@ -22,6 +25,8 @@ namespace TwitchBotFramework
         /// Scopes bot needs access to
         /// </summary>
         protected abstract List<AuthScopes> _scopes { get; }
+
+        public User? Owner => _owner;
 
         /// <summary>
         /// Public api access
@@ -32,6 +37,11 @@ namespace TwitchBotFramework
         /// Public client access
         /// </summary>
         public TwitchClient Client => _client;
+
+        /// <summary>
+        /// Public eventsub access
+        /// </summary>
+        public EventSubWebsocketClient EventSub => _eventSub;
 
         /// <summary>
         /// Twitch bot framework
@@ -47,6 +57,9 @@ namespace TwitchBotFramework
                 MessagesAllowedInPeriod = 750,
                 ThrottlingPeriod = TimeSpan.FromSeconds(30)
             }));
+            EventLoggerFactory loggerFactory = new EventLoggerFactory(LoggingAsync);
+            loggerFactory.SetLogLevel(LogLevel.Error);
+            _eventSub = new EventSubWebsocketClient(loggerFactory);
         }
 
         /// <summary>
@@ -80,13 +93,52 @@ namespace TwitchBotFramework
         {
             await LoggingAsync("Connecting client...");
             _client.OnLog += _client_OnLog;
-            _client.Initialize(new ConnectionCredentials(_owner.Login, _token.AccessToken));
+            _client.Initialize(new ConnectionCredentials(_owner.Login, _token.AccessToken), _owner.Login);
             _client.Connect();
+            _eventSub.WebsocketConnected += _eventSub_Connected;
+            await _eventSub.ConnectAsync();
+        }
+
+        private async Task _eventSub_Connected(object? sender, TwitchLib.EventSub.Websockets.Core.EventArgs.WebsocketConnectedArgs args)
+        {
+            if (!args.IsRequestedReconnect)
+                await SubscribeTopics();
         }
 
         private void _client_OnLog(object? sender, TwitchLib.Client.Events.OnLogArgs e)
         {
             LoggingAsync(e.Data);
+        }
+
+        private async Task SubscribeTopics()
+        {
+            try
+            {
+                Dictionary<string, int> topics = new Dictionary<string, int>()
+                {
+                    { "channel.channel_points_custom_reward_redemption.add", 1 },
+                    { "channel.bits.use", 1 }
+                };
+                var condition = new Dictionary<string, string>()
+                {
+                    { "broadcaster_user_id", _owner.Id }
+                };
+                foreach (var topic in topics)
+                {
+                    var subResponse = await _api.Helix.EventSub.CreateEventSubSubscriptionAsync(
+                        topic.Key,
+                        topic.Value.ToString(),
+                        condition,
+                        EventSubTransportMethod.Websocket,
+                        _eventSub.SessionId,
+                        clientId: _token.ClientId,
+                        accessToken: _token.AccessToken);
+                }
+            }
+            catch (Exception ex)
+            {
+                await LoggingAsync($"Subscription Error: {ex.Message}");
+            }
         }
 
         private async Task GetTokenAsync(string clientId, string secret, List<AuthScopes> scopes)
@@ -110,6 +162,7 @@ namespace TwitchBotFramework
             }
             _token = new Token
             {
+                ClientId = clientId,
                 AccessToken = tokenResult.AccessToken,
                 Expires = DateTime.UtcNow.AddSeconds(tokenResult.ExpiresIn),
                 RefreshToken = tokenResult.RefreshToken,
@@ -130,6 +183,7 @@ namespace TwitchBotFramework
             }
             _token = new Token
             {
+                ClientId = clientId,
                 AccessToken = res.AccessToken,
                 Expires = DateTime.UtcNow.AddSeconds(res.ExpiresIn),
                 RefreshToken = res.RefreshToken,
@@ -172,8 +226,55 @@ namespace TwitchBotFramework
         protected abstract Task LoggingAsync(string msg);
     }
 
+    internal class EventLogger : ILogger
+    {
+        private readonly Func<string, Task> _logAction;
+        private LogLevel _logLevel;
+        public EventLogger(Func<string, Task> logAction)
+        {
+            _logAction = logAction;
+        }
+        public void SetLogLevel(LogLevel logLevel)
+        {
+            _logLevel = logLevel;
+        }
+        public IDisposable BeginScope<TState>(TState state) => null;
+        public bool IsEnabled(LogLevel logLevel) => logLevel >= _logLevel;
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
+        {
+            if (IsEnabled(logLevel) && _logAction != null)
+            {
+                string message = formatter(state, exception);
+                _logAction($"[{logLevel}] {message}").ConfigureAwait(false);
+            }
+        }
+    }
+
+    internal class EventLoggerFactory : ILoggerFactory
+    {
+        private readonly Func<string, Task> _logAction;
+        private LogLevel _logLevel;
+        public EventLoggerFactory(Func<string, Task> logAction)
+        {
+            _logAction = logAction;
+        }
+        public void SetLogLevel(LogLevel logLevel)
+        {
+            _logLevel = logLevel;
+        }
+        public ILogger CreateLogger(string categoryName)
+        {
+            var logger = new EventLogger(_logAction);
+            logger.SetLogLevel(_logLevel);
+            return logger;
+        }
+        public void AddProvider(ILoggerProvider provider) { }
+        public void Dispose() { }
+    }
+
     public class Token
     {
+        public string ClientId { get; set; }
         public string AccessToken { get; set; }
         public DateTime Expires { get; set; }
         public string RefreshToken { get; set; }
