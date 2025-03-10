@@ -26,6 +26,11 @@ namespace TwitchBotFramework
         /// </summary>
         protected abstract List<AuthScopes> _scopes { get; }
 
+        /// <summary>
+        /// Topics eventsub needs access to
+        /// </summary>
+        protected abstract Dictionary<string, int> topics { get; }
+
         public User? Owner => _owner;
 
         /// <summary>
@@ -114,11 +119,6 @@ namespace TwitchBotFramework
         {
             try
             {
-                Dictionary<string, int> topics = new Dictionary<string, int>()
-                {
-                    { "channel.channel_points_custom_reward_redemption.add", 1 },
-                    { "channel.bits.use", 1 }
-                };
                 var condition = new Dictionary<string, string>()
                 {
                     { "broadcaster_user_id", _owner.Id }
