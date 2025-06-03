@@ -101,13 +101,29 @@ namespace TwitchBotFramework
             _client.Initialize(new ConnectionCredentials(_owner.Login, _token.AccessToken), _owner.Login);
             _client.Connect();
             _eventSub.WebsocketConnected += _eventSub_Connected;
+            _eventSub.WebsocketDisconnected += _eventSub_WebsocketDisconnected;
             await _eventSub.ConnectAsync();
+        }
+
+        /// <summary>
+        /// Disconnect bot framework
+        /// </summary>
+        /// <returns></returns>
+        public async Task DisconnectAsync()
+        {
+            _client.Disconnect();
+            await _eventSub.DisconnectAsync();
         }
 
         private async Task _eventSub_Connected(object? sender, TwitchLib.EventSub.Websockets.Core.EventArgs.WebsocketConnectedArgs args)
         {
             if (!args.IsRequestedReconnect)
                 await SubscribeTopics();
+        }
+
+        private async Task _eventSub_WebsocketDisconnected(object sender, EventArgs args)
+        {
+            await _eventSub.ReconnectAsync();
         }
 
         private void _client_OnLog(object? sender, TwitchLib.Client.Events.OnLogArgs e)
