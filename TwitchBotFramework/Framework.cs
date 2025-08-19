@@ -27,7 +27,7 @@ namespace TwitchBotFramework
         protected abstract List<AuthScopes> _scopes { get; }
 
         /// <summary>
-        /// Topics eventsub needs access to
+        /// Topics eventsub needs access to, int is version
         /// </summary>
         protected abstract Dictionary<string, int> topics { get; }
 
