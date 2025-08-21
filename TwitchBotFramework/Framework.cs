@@ -137,7 +137,8 @@ namespace TwitchBotFramework
             {
                 var condition = new Dictionary<string, string>()
                 {
-                    { "broadcaster_user_id", _owner.Id }
+                    { "broadcaster_user_id", _owner.Id },
+                    { "moderator_user_id", _owner.Id }
                 };
                 foreach (var topic in topics)
                 {

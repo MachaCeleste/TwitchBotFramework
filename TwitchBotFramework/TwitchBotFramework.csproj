@@ -4,6 +4,9 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Title>Twitch Bot Framework</Title>
+    <Authors>Macha Celeste</Authors>
+    <Company>Celestial Corp</Company>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -16,8 +19,9 @@
 
   <ItemGroup>
     <PackageReference Include="TwitchLib" Version="3.5.3" />
+    <PackageReference Include="TwitchLib.Api" Version="3.10.1-preview.197.eadb60e" />
     <PackageReference Include="TwitchLib.EventSub.Webhooks" Version="2.3.0" />
-    <PackageReference Include="TwitchLib.EventSub.Websockets" Version="0.5.0" />
+    <PackageReference Include="TwitchLib.EventSub.Websockets" Version="0.7.0-preview.78.d5d3fa8" />
   </ItemGroup>
 
 </Project>
